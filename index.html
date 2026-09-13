@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOXEL GRAND PRIX · F1 BROADCAST SIMULATION</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<!-- ===================== MENU ===================== -->
+<div id="menu">
+  <div class="menu-inner">
+    <div class="title-block">
+      <h1 class="title">VOXEL <span>GRAND PRIX</span></h1>
+      <div class="subtitle">VOXEL GRAND PRIX · 6 LEGENDARY CIRCUITS BUILT FROM REAL TELEMETRY DATA · 10-TEAM GRID</div>
+      <div class="menu-row" style="background: rgba(15, 18, 28, 0.8); display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="room-code-input" placeholder="ENTER FRIEND'S CODE (OR GENERATE)" 
+               style="flex: 1; padding: 12px; background: #0c0f17; border: 1px solid rgba(255,255,255,0.2); color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; text-transform: uppercase; outline: none; border-radius: 4px;">
+        <button id="btn-gen-code" style="padding: 12px 16px; background: #00e5ff; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-family: 'JetBrains Mono', monospace;">GENERATE</button>
+      </div>    
+    </div>
+    <div id="track-cards"></div>
+    <div class="menu-row">
+      <div class="menu-label">CAR & TEAM</div>
+      <div id="selected-team"></div>
+      <button id="btn-garage">🏎 SETUP & GARAGE</button>
+    </div>
+    <div class="menu-row">
+      <div class="menu-label">GAME MODE</div>
+      <button class="mode-chip" data-mode="time">⏱ TIME TRIAL · FREE PRACTICE</button>
+      <button class="mode-chip" data-mode="race">🏁 GRAND PRIX · 10 TEAMS 3 LAPS</button>
+    </div>
+    <div class="controls-help">
+      <span><b>W / ↑</b> THROTTLE</span><span><b>S / ↓</b> BRAKE</span><span><b>A D / ← →</b> STEER</span>
+      <span><b>C</b> CAMERA</span><span><b>R</b> RESET</span><span><b>P</b> DEMO MODE</span>
+      <span><b>M</b> MUTE</span><span><b>Esc</b> PAUSE</span><span>🎮 GAMEPAD READY</span>
+    </div>
+    <button id="btn-start">LIGHTS OUT</button>
+  </div>
+</div>
+
+<!-- ===================== HUD ===================== -->
+<div id="hud" class="hidden">
+  <div id="hud-topleft">
+    <div id="hud-track-name"></div>
+    <div id="hud-corner"></div>
+  </div>
+
+  <div id="hud-times">
+    <div class="lap-chip">LAP <span id="hud-lap">1</span></div>
+    <div id="hud-time">0:00.000</div>
+    <div class="hud-times-row">
+      <span>LAST <b id="hud-last">--:--.---</b></span>
+      <span class="best-col">BEST <b id="hud-best">--:--.---</b></span>
+    </div>
+  </div>
+
+  <div id="hud-autopilot" class="hidden">🤖 DEMO MODE</div>
+
+  <!-- HYBRID CLUSTER HUD -->
+  <div class="f1-hud-cluster">
+    <!-- Left Dial: Battery Arc Gauge -->
+    <div class="hud-dial left-dial">
+      <svg class="arc-svg" viewBox="0 0 100 100">
+        <circle class="arc-bg" cx="50" cy="50" r="42" />
+        <circle class="arc-fill" id="hud-batt-arc" cx="50" cy="50" r="42" />
+      </svg>
+      <div class="dial-content">
+        <span class="label">BATT</span>
+        <span class="value" id="hud-batt-val">49<small>%</small></span>
+      </div>
+    </div>
+
+    <!-- Center Console: Shift LEDs & Gear Number -->
+    <div class="hud-center">
+      <div class="led-bar" id="hud-led-bar"></div>
+      
+      <div class="gear-wrapper">
+        <span class="gear-number" id="hud-gear">3</span>
+      </div>
+
+      <div class="status-mode" id="hud-mode">HARVESTING</div>
+      <div class="drs-indicator-light" id="hud-drs-light"></div>
+    </div>
+
+    <!-- Right Dial: Speed & RPM -->
+    <div class="hud-dial right-dial">
+      <div class="dial-content">
+        <span class="label">MPH</span>
+        <span class="value speed-val" id="hud-speed">79</span>
+        <span class="label sub-label">RPM</span>
+        <span class="sub-value" id="hud-rpm">9374</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="hud-pos" class="hidden">P8<i>/8</i></div>
+  <div id="hud-gaps" class="hidden"></div>
+
+  <canvas id="minimap" width="230" height="230"></canvas>
+  <div id="hud-camera-label"></div>
+  <div id="hud-cam-hint">C CAMERA · R RESET · Esc PAUSE</div>
+</div>
+
+<!-- ===================== OVERLAYS ===================== -->
+<div id="lights" class="hidden">
+  <div class="lights-bar">
+    <div class="light-col"><i></i><i></i></div>
+    <div class="light-col"><i></i><i></i></div>
+    <div class="light-col"><i></i><i></i></div>
+    <div class="light-col"><i></i><i></i></div>
+    <div class="light-col"><i></i><i></i></div>
+  </div>
+</div>
+
+<div id="center-msg" class="hidden"></div>
+<div id="wrongway" class="hidden">⚠ WRONG WAY</div>
+
+<div id="pause" class="hidden">
+  <div class="pause-box">
+    <h2>PAUSED</h2>
+    <button id="btn-resume">RESUME RACE</button>
+    <button id="btn-restart">RESTART SESSION</button>
+    <button id="btn-menu">RETURN TO MENU</button>
+  </div>
+</div>
+
+<div id="results" class="hidden">
+  <div class="results-box">
+    <div class="results-flag">🏁</div>
+    <h2>SESSION COMPLETE</h2>
+    <div id="results-pos">P1</div>
+    <div id="results-rows"></div>
+    <div class="results-actions">
+      <button id="btn-res-again">RETRY RACE</button>
+      <button id="btn-res-menu">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="hidden"><div class="spinner"></div><span id="loading-msg">GENERATING CIRCUIT…</span></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
+```[cite: 2]

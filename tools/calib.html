@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Circuit calibration</title>
+<style>
+  body { background:#14161c; color:#eee; font-family:Consolas,monospace; margin:12px; }
+  .row { display:flex; gap:14px; flex-wrap:wrap; }
+  .cell { background:#1d2028; padding:8px; border-radius:8px; }
+  canvas { background:#242833; border-radius:6px; cursor:crosshair; }
+  h3 { margin:4px 0; font-size:14px; }
+  #log { white-space:pre; font-size:12px; margin-top:10px; color:#8f8; }
+</style>
+</head>
+<body>
+<div class="row" id="row"></div>
+<div id="log">click on a path to print its lap fraction…</div>
+<script type="module">
+import { CIRCUITS } from '../src/data/circuits.js';
+const row = document.getElementById('row'), logEl = document.getElementById('log');
+window.__clicks = [];
+
+for (const [id, c] of Object.entries(CIRCUITS)) {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  cell.innerHTML = `<h3>${id} — ${c.length}m, ${c.n}pts (north=up)</h3>`;
+  const cv = document.createElement('canvas'); cv.width = 560; cv.height = 560;
+  cell.appendChild(cv); row.appendChild(cell);
+  const ctx = cv.getContext('2d');
+
+  const xs = c.pts.map(p => p[0]), zs = c.pts.map(p => p[1]);
+  const minx = Math.min(...xs), maxx = Math.max(...xs), minz = Math.min(...zs), maxz = Math.max(...zs);
+  const scale = 500 / Math.max(maxx - minx, maxz - minz);
+  const ox = (560 - (maxx - minx) * scale) / 2, oz = (560 - (maxz - minz) * scale) / 2;
+  const px = p => [ox + (p[0] - minx) * scale, oz + (p[1] - minz) * scale];
+
+  // cumulative arc length per vertex
+  const cum = [0];
+  for (let i = 1; i <= c.pts.length; i++) {
+    const p = c.pts[i - 1], q = c.pts[i % c.pts.length];
+    cum.push(cum[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
+  }
+  const total = cum[c.pts.length];
+
+  ctx.strokeStyle = '#5ad'; ctx.lineWidth = 3; ctx.beginPath();
+  c.pts.forEach((p, i) => { const [x, y] = px(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.closePath(); ctx.stroke();
+
+  // fraction labels every 5%, arrows every 10%
+  ctx.fillStyle = '#ffd24a'; ctx.font = '11px Consolas';
+  for (let f = 0; f < 1; f += 0.05) {
+    const s = f * total;
+    let i = cum.findIndex(v => v > s) - 1; if (i < 0) i = 0;
+    const t = (s - cum[i]) / (cum[i + 1] - cum[i] || 1);
+    const p = c.pts[i], q = c.pts[(i + 1) % c.pts.length];
+    const pt = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const [x, y] = px(pt);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillText(f.toFixed(2).slice(1), x + 4, y - 4);
+    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+    if (Math.round(f * 100) % 10 === 0) {
+      const dx = (q[0] - p[0]), dz = (q[1] - p[1]), L = Math.hypot(dx, dz) || 1;
+      ctx.strokeStyle = '#f66'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x + dx / L * 16, y + dz / L * 16); ctx.stroke();
+      const a = Math.atan2(dz, dx);
+      ctx.beginPath();
+      ctx.moveTo(x + dx / L * 16, y + dz / L * 16);
+      ctx.lineTo(x + Math.cos(a + 2.6) * 6 + dx / L * 16, y + Math.sin(a + 2.6) * 6 + dz / L * 16);
+      ctx.moveTo(x + dx / L * 16, y + dz / L * 16);
+      ctx.lineTo(x + Math.cos(a - 2.6) * 6 + dx / L * 16, y + Math.sin(a - 2.6) * 6 + dz / L * 16);
+      ctx.stroke();
+    }
+  }
+  // index-0 marker
+  const [sx, sy] = px(c.pts[0]);
+  ctx.fillStyle = '#4f4'; ctx.beginPath(); ctx.arc(sx, sy, 6, 0, 7); ctx.fill();
+  ctx.fillText('i0', sx + 8, sy + 4);
+
+  cv.addEventListener('click', e => {
+    const r = cv.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best = 0, bd = 1e9;
+    // dense sampling for nearest fraction
+    for (let s = 0; s < total; s += 3) {
+      let i = cum.findIndex(v => v > s) - 1; if (i < 0) i = 0;
+      const t = (s - cum[i]) / (cum[i + 1] - cum[i] || 1);
+      const p = c.pts[i], q = c.pts[(i + 1) % c.pts.length];
+      const [x, y] = px([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+      const d = (x - mx) ** 2 + (y - my) ** 2;
+      if (d < bd) { bd = d; best = s / total; }
+    }
+    const rec = `${id} frac=${best.toFixed(4)}`;
+    window.__clicks.push(rec);
+    logEl.textContent = window.__clicks.slice(-14).join('\n');
+  });
+}
+</script>
+</body>
+</html>
